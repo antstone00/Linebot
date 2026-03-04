@@ -7,10 +7,11 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
-# --- 設定區 ---
-LINE_CHANNEL_ACCESS_TOKEN = '你的_LINE_TOKEN'
-LINE_CHANNEL_SECRET = '你的_LINE_SECRET'
-GEMINI_API_KEY = '你的_GEMINI_API_KEY'
+# --- 核心改動：從系統環境讀取變數 ---
+# 這些變數名稱（如 LINE_CHANNEL_SECRET）稍後要在 Render 後台設定
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # 初始化 LINE SDK
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
@@ -18,7 +19,7 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # 初始化 Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash') # 建議用 flash 版，速度快且成本低
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -33,7 +34,6 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_text = event.message.text
-    
     try:
         # 呼叫 Gemini 產生回覆
         response = model.generate_content(user_text)
@@ -42,11 +42,12 @@ def handle_message(event):
         reply_text = "抱歉，我現在大腦有點短路，請稍後再試！"
         print(f"Error: {e}")
 
-    # 回傳給使用者
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=reply_text)
     )
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    # 在雲端部署時，通常由 gunicorn 啟動，此處保持預設即可
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
